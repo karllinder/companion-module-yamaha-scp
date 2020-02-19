@@ -1,5 +1,6 @@
 // Control module for Yamaha Pro Audio
 // Jack Longden <Jack@atov.co.uk> 2019
+// Karl Linder <linder.karl@gmail.com> 2020 - added DCA
 var tcp = require('../../tcp');
 var instance_skel = require('../../instance_skel');
 var debug;
@@ -10,6 +11,7 @@ var inputch   = 0;
 var auxbus    = 0;
 var mixbus    = 0;
 var matrixbus = 0;
+var dcabus    = 0;
 
 // Instance Setup & Connect
 function instance(system, id, config) {
@@ -64,11 +66,13 @@ instance.prototype.init_tcp = function() {
 	function getmixbus(){
 		self.socket.send('devinfo mixbus' + "\n");
 	}
-
-	function getmatixbus(){
+// rename from getmatixbus to getmatrixbus, Issue Mix Bus Actions not shown in Action List
+	function getmatrixbus(){
 		self.socket.send('devinfo matrixbus' + "\n");
 	}
-
+	function getdca(){
+		self.socket.send('devinfo dca' + "\n");
+	}
 	if (self.socket !== undefined) {
 		self.socket.destroy();
 		delete self.socket;
@@ -95,7 +99,9 @@ instance.prototype.init_tcp = function() {
 			setTimeout(getinputch,  500 );
 			setTimeout(getauxbus,   1000);
 			setTimeout(getmixbus,   1500);
-			setTimeout(getmatixbus, 2000);
+            //rename to getmatrixbus, from getmatixbus, issue Mix Bus Actions not shown in Action List
+			setTimeout(getmatrixbus, 2000);
+			setTimeout(getdca, 2500);
 		});
 
 		self.socket.on('data', function (chunk) {
@@ -154,7 +160,14 @@ instance.prototype.init_tcp = function() {
 				self.log('',"Matrix Bus Count: " + matrixbus);
 				self.actions();
 			}
-
+			
+			if (receivebuffer.indexOf('dca') != '-1'){
+				linestring = line.toString();
+				dca = linestring.match(/\d+/g).map(Number);;
+				receivebuffer = '';
+				self.log('',"DCA Count: " + dca);
+				self.actions();
+			}
 			receivebuffer = '';
 		});
 	}
@@ -192,6 +205,7 @@ instance.prototype.actions = function(system) {
 	var auxbusopt    = [];
 	var mixbusopt    = [];
 	var matrixbusopt = [];
+	var dcaopt       = [];
 
 	if(inputch>0){
 		for (var i = 0; i < inputch; i++){
@@ -216,7 +230,11 @@ instance.prototype.actions = function(system) {
 			matrixbusopt.push({ id: i,  label: i+1 })
 		}
 	}
-
+	if(dca>0){
+		for (var i = 0; i < dca; i++){
+			dcaopt.push({ id: i,  label: i+1 })
+		}
+	}
 	if(productnm == 'TF'){
 
 		var commands = {
@@ -400,19 +418,20 @@ instance.prototype.actions = function(system) {
 					{ type: 'textinput',label: 'Value (-32768 to 1000)',id: 'ChAct',default: '0',regex: self.REGEX_SIGNED_NUMBER }
 				]
 			},
-
+// change label to Mix, from Matrix - Issue Mix Bus Actions not shown in Action List
 			'MixOn': {
 				label: 'Mix On',
-				options: [{ type: 'dropdown', label: 'Matrix', id: 'Ch', default: '0', choices: mixbusopt }]
+				options: [{ type: 'dropdown', label: 'Mix', id: 'Ch', default: '0', choices: mixbusopt }]
 			},
+// change label to Mix, from Matrix - Issue Mix Bus Actions not shown in Action List
 			'MixOff': {
 				label: 'Mix Off',
-				options: [{ type: 'dropdown', label: 'Matrix', id: 'Ch', default: '0', choices: mixbusopt }]
+				options: [{ type: 'dropdown', label: 'Mix', id: 'Ch', default: '0', choices: mixbusopt }]
 			},
 			'MixLevel': {
 				label: 'Mix Level Adjust',
 				options: [
-					{ type: 'dropdown', label: 'Matrix', id: 'Ch', default: '0', choices: mixbusopt },
+					{ type: 'dropdown', label: 'Mix', id: 'Ch', default: '0', choices: mixbusopt },
 					{ type: 'textinput',label: 'Value (-32768 to 1000)',id: 'ChAct',default: '0',regex: self.REGEX_SIGNED_NUMBER }
 				]
 			},
@@ -432,7 +451,22 @@ instance.prototype.actions = function(system) {
 					{ type: 'textinput',label: 'Value (-32768 to 1000)',id: 'ChAct',default: '0',regex: self.REGEX_SIGNED_NUMBER }
 				]
 			},
-
+			
+			'DCAon': {
+				label: 'DCA On',
+				options: [{ type: 'dropdown', label: 'DCA', id: 'Ch', default: '0', choices: dcaopt }]
+			},
+			'DCAoff': {
+				label: 'DCA Off',
+				options: [{ type: 'dropdown', label: 'DCA', id: 'Ch', default: '0', choices: dcaopt }]
+			},
+			'DCALevel': {
+				label: 'DCA Level Adjust',
+				options: [
+					{ type: 'dropdown', label: 'DCA', id: 'Ch', default: '0', choices: dcaopt },
+					{ type: 'textinput',label: 'Value (-32768 to 1000)',id: 'ChAct',default: '0',regex: self.REGEX_SIGNED_NUMBER }
+				]
+			},
 			'CLQLRecall': {
 				label: 'Recall Scene',
 				options: [{ type: 'textinput',label: 'Scene (0 to 300)',id: 'Scene',default: '0',regex: self.REGEX_SIGNED_NUMBER }]
@@ -497,6 +531,18 @@ instance.prototype.action = function(action) {
 			cmd = 'set MIXER:Current/Mtrx/Fader/Level ' + opt.Ch + ' 0 ' + opt.ChAct;
 			break;
 
+		case 'DCAon':
+			cmd = 'set MIXER:Current/DCA/Fader/On '+ opt.Ch + ' 0 1';
+			break;
+
+		case 'DCAOff':
+			cmd = 'set MIXER:Current/DCA/Fader/On '+ opt.Ch + ' 0 0';
+			break;
+
+		case 'DCALevel':
+			cmd = 'set MIXER:Current/DCA/Fader/Level ' + opt.Ch + ' 0 ' + opt.ChAct;
+			break;
+			
 		case 'TFRecall':
 			cmd = 'ssrecall_ex scene_'+ opt.Bank + ' ' + opt.Scene;
 			break;

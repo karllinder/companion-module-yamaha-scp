@@ -23,4 +23,6 @@
 * Matrix Bus Level                           
 * Recall Presets
 
-** TEST **
+** TEST commands **
+* DCA on/off/level (new request)
+* Mix on CL (was issue)
